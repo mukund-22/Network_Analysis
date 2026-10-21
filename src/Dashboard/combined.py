@@ -122,7 +122,7 @@ def anomaly_dashboard():
     """)
 
     # --- Implicitly provided data ---
-    date_rng = pd.date_range(start='2023-01-01', end='2023-01-02', freq='H')
+    date_rng = pd.date_range(start='2023-01-01', end='2023-01-02', freq='h')
     n_points = len(date_rng)
     
     pd_values = np.sin(np.linspace(0, 10, n_points)) * 50 + 100
