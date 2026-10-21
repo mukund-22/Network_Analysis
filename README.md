@@ -1,2 +1,424 @@
-# Network-Prediction-Analysis
+# Network Prediction & Analysis
 
+A machine learning project for **time-series prediction of network performance metrics**, comparing **LSTM** and **XGBoost** approaches and presenting the resulting forecasts through an interactive Streamlit dashboard.
+
+The project works with three network metrics:
+
+- **PL**
+- **PD**
+- **PDV**
+
+It includes model development, time-series forecasting, prediction consolidation, and interactive visualization.
+
+## Project Overview
+
+The system follows this workflow:
+
+```text
+Network Dataset
+      │
+      ▼
+Data Preprocessing
+      │
+      ├──────────────────┐
+      ▼                  ▼
+    LSTM              XGBoost
+      │                  │
+      ▼                  ▼
+LSTM Predictions    XGBoost Predictions
+      │                  │
+      └─────────┬────────┘
+                ▼
+        Prediction Comparison
+                │
+                ▼
+        Combined Result CSV
+                │
+                ▼
+       Streamlit Dashboard
+```
+
+## Features
+
+- Time-series forecasting of PL, PD, and PDV
+- LSTM-based sequence modeling
+- XGBoost regression using lagged features
+- One-step-ahead rolling prediction with LSTM
+- Comparison of LSTM and XGBoost predictions
+- Interactive Streamlit visualization
+- Network anomaly analysis
+- Downloadable prediction results
+
+## Dataset
+
+The input dataset is stored in:
+
+```text
+src/data/Data1.csv
+```
+
+The dataset contains:
+
+```text
+PERIOD_START_TIME
+pl
+pd
+pdv
+```
+
+The timestamp is converted to a datetime representation and sorted chronologically before modeling.
+
+The dataset contains 5,893 observations in the provided XGBoost notebook.
+
+---
+
+# LSTM Model
+
+The LSTM implementation is located at:
+
+```text
+src/pred/LSTM.ipynb
+```
+
+## Preprocessing
+
+The three target features are:
+
+```python
+features = ['pl', 'pd', 'pdv']
+```
+
+A sequence length of **5 time steps** is used. Each feature is independently normalized using `MinMaxScaler`.
+
+Sequences are generated using the previous five observations to predict the next observation:
+
+```text
+[t-5, t-4, t-3, t-2, t-1] → [t]
+```
+
+## Architecture
+
+The LSTM network consists of:
+
+```text
+Input
+  │
+  ▼
+LSTM — 256 units, ReLU
+  │
+  ▼
+Dropout — 30%
+  │
+  ▼
+LSTM — 64 units, ReLU
+  │
+  ▼
+Dropout — 30%
+  │
+  ▼
+Dense — 32 units, ReLU
+  │
+  ▼
+Dense — 16 units, ReLU
+  │
+  ▼
+Dense — 3 outputs
+```
+
+The three outputs correspond to:
+
+```text
+PL
+PD
+PDV
+```
+
+The model uses:
+
+- **Optimizer:** Adam
+- **Loss:** Mean Squared Error (MSE)
+- **Maximum epochs:** 100
+- **Batch size:** 32
+- **Validation split:** 20%
+
+The model also uses EarlyStopping and ReduceLROnPlateau to control training.  
+
+## Rolling Forecast
+
+The LSTM performs one-step-ahead forecasting over the test period.
+
+After each prediction, the rolling input window is updated, and predictions are converted back to the original feature scale using the corresponding scalers.
+
+The resulting predictions are saved to:
+
+```text
+src/data/lstm_result.csv
+```
+
+with columns:
+
+```text
+PERIOD_START_TIME
+pl_lstm
+pd_lstm
+pdv_lstm
+```
+
+---
+
+# XGBoost Model
+
+The XGBoost implementation is located at:
+
+```text
+src/pred/XGB.ipynb
+```
+
+## Feature Engineering
+
+Instead of sequence tensors, XGBoost uses lagged features.
+
+For each metric, three lag features are created:
+
+```text
+pl_lag1
+pl_lag2
+pl_lag3
+
+pd_lag1
+pd_lag2
+pd_lag3
+
+pdv_lag1
+pdv_lag2
+pdv_lag3
+```
+
+The dataset is then divided into training and test periods using **27 September 2022** as the test date.
+
+## Model Configuration
+
+A separate XGBoost regressor is trained for each of the three metrics.
+
+Configuration:
+
+```text
+Objective: reg:tweedie
+Tweedie variance power: 1.5
+Learning rate: 0.1
+Maximum depth: 4
+Number of estimators: 100
+Random state: 42
+```
+
+The target is MinMax-scaled before training and transformed back to the original scale after prediction. Negative predictions are clipped to zero.
+
+The predictions are saved to:
+
+```text
+src/data/xgb_result.csv
+```
+
+with:
+
+```text
+PERIOD_START_TIME
+pl_xgb
+pd_xgb
+pdv_xgb
+```
+
+---
+
+# Prediction Comparison
+
+The comparison workflow is implemented in:
+
+```text
+src/pred/Comparision.ipynb
+```
+
+The notebook loads:
+
+```text
+Data1.csv
+lstm_result.csv
+xgb_result.csv
+```
+
+and aligns the actual values with the LSTM and XGBoost predictions using `PERIOD_START_TIME`. 
+
+The consolidated dataset contains:
+
+```text
+PERIOD_START_TIME
+
+pl
+pl_lstm
+pl_xgb
+
+pd
+pd_lstm
+pd_xgb
+
+pdv
+pdv_lstm
+pdv_xgb
+```
+
+The final output is stored as:
+
+```text
+src/data/final_result.csv
+```
+
+
+
+---
+
+# Streamlit Dashboard
+
+The interactive dashboard is implemented in:
+
+```text
+src/Dashboard/combined.py
+```
+
+The dashboard provides two main components:
+
+### Forecasting
+
+The forecasting interface allows users to view the actual values alongside predictions generated by:
+
+- LSTM
+- XGBoost
+- Both models
+
+for the available network metrics.
+
+### Anomaly Analysis
+
+The dashboard also contains an anomaly-analysis interface that visualizes deviations in the network metrics and highlights potential anomalous observations.
+
+---
+
+# Project Structure
+
+```text
+Network-Prediction-Analysis/
+│
+├── src/
+│   │
+│   ├── pred/
+│   │   ├── LSTM.ipynb
+│   │   ├── XGB.ipynb
+│   │   └── Comparision.ipynb
+│   │
+│   ├── Dashboard/
+│   │   └── combined.py
+│   │
+│   └── data/
+│       ├── Data1.csv
+│       ├── lstm_result.csv
+│       ├── xgb_result.csv
+│       └── final_result.csv
+│
+├── requirements.txt
+├── README.md
+└── .gitignore
+```
+
+# Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| Python | Core development |
+| Pandas | Data processing |
+| NumPy | Numerical computation |
+| Scikit-learn | Data preprocessing |
+| TensorFlow / Keras | LSTM model |
+| XGBoost | Gradient-boosting regression |
+| Plotly | Data visualization |
+| Streamlit | Interactive dashboard |
+| Jupyter Notebook | Model development |
+| Git / GitHub | Version control |
+
+# Installation
+
+## 1. Clone the repository
+
+```bash
+git clone https://github.com/mukund-22/Network_Analysis.git
+cd Network_Analysis
+```
+
+## 2. Create a virtual environment
+
+```bash
+python3 -m venv venv
+```
+
+Activate it on macOS/Linux:
+
+```bash
+source venv/bin/activate
+```
+
+On Windows:
+
+```bash
+venv\Scripts\activate
+```
+
+## 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+# Run the Dashboard
+
+From the project root:
+
+```bash
+streamlit run src/Dashboard/combined.py
+```
+
+The application will be available at:
+
+```text
+http://localhost:8501
+```
+
+# Generated Results
+
+The project generates and uses the following prediction files:
+
+```text
+lstm_result.csv
+xgb_result.csv
+final_result.csv
+```
+
+These files allow the Streamlit dashboard to visualize the model outputs without retraining the models every time the dashboard is launched.
+
+# Future Improvements
+
+Potential extensions include:
+
+- Automated model retraining
+- Hyperparameter optimization
+- Additional forecasting metrics such as MAE, RMSE, and MAPE
+- More advanced anomaly-detection methods
+- Real-time network data ingestion
+- Automated data pipelines
+- Model serving through an API
+- Expanded dashboard filtering and monitoring
+
+# Collaboration
+
+This project was developed collaboratively, covering the machine-learning models, prediction pipeline, result consolidation, and interactive dashboard.
+
+# Purpose
+
+This project was developed as a machine-learning and data-analysis project demonstrating the application of **deep learning and gradient-boosting techniques to network time-series prediction**.
